@@ -7,7 +7,7 @@
     "distDir": "../build"
   },
   "package": {
-    "productName": "Search Tool",
+    "productName": "Search-Tool",
     "version": "0.1.0"
   },
   "tauri": {

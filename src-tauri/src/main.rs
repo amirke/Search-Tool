@@ -14,6 +14,8 @@ use std::process::Command;         // To run shell commands (ripgrep)
 use tauri::command;                // Attribute to expose functions to JS
 use rfd::FileDialog;              // For native file dialogs
 use std::fs;
+use std::io::Read;
+use std::path::Path;
 
 // ----------------------
 // Main application entry
@@ -21,7 +23,7 @@ use std::fs;
 fn main() {
     tauri::Builder::default()                  // Initialize Tauri builder
         .invoke_handler(                       // Register Rust functions exposed to JS
-            tauri::generate_handler![search_text, open_folder_dialog] // Include all commands
+            tauri::generate_handler![search_text, open_folder_dialog, read_file] // Include all commands
         )
         .run(tauri::generate_context!())       // Run the application with Tauri context
         .expect("error while running tauri application"); // Crash if startup fails
@@ -72,7 +74,7 @@ fn search_text(query: String, path: String) -> Result<String, String> {
             .filter(|line| !line.trim().is_empty())
             .map(|line| {
                 // Find the last two colons to properly split the line
-                let mut last_colon = line.rfind(':').unwrap_or(0);
+                let last_colon = line.rfind(':').unwrap_or(0);
                 let second_last_colon = line[..last_colon].rfind(':').unwrap_or(0);
                 
                 if last_colon > 0 && second_last_colon > 0 {
@@ -123,4 +125,43 @@ fn open_folder_dialog() -> Option<String> {
         .set_directory(".")
         .pick_folder()
         .map(|p| p.display().to_string())
+}
+
+#[command]
+fn read_file(path: String) -> Result<String, String> {
+    // Validate path
+    if path.trim().is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+
+    let path = Path::new(&path);
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", path.display()));
+    }
+
+    // Check if it's a file
+    if !path.is_file() {
+        return Err(format!("Path is not a file: {}", path.display()));
+    }
+
+    // Try to read the file
+    let mut file = fs::File::open(path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    // Read file content
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    // Check if the content looks like binary data
+    if content.len() > 1_000_000 { // 1MB limit
+        return Err("File is too large to preview".to_string());
+    }
+
+    // Check if the content contains non-text characters
+    if content.chars().any(|c| !c.is_ascii() && !c.is_whitespace()) {
+        return Err("File appears to be binary or contains non-text characters".to_string());
+    }
+
+    Ok(content)
 }
