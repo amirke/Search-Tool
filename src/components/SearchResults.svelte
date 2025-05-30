@@ -3,269 +3,286 @@
   import { getDisplayPath } from '../utils/pathUtils';
   import { readFile } from '../services/searchService';
   import { highlightTextAction } from './highlightText';
+  import { onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/tauri';
+  import { readTextFile } from '@tauri-apps/api/fs';
+  import { parseResults } from '../utils/resultParser';
 
-  export let files: SearchFile[] = [];
-  export let basePath = '.';
-  export let error = '';
-  export let highlightColor = '#ffff00';
-  export let searchQuery = '';
-  export let useHorizontalScroll = false;
-  export let scannedFiles: number | undefined;
-  export let filesWithMatches: number | undefined;
-  export let totalMatches: number | undefined;
-  export let durationMs: number | undefined;
+  export let results: string = '';
+  export let searchPath: string = '';
 
+  let parsedResults: any[] = [];
   let selectedFile: string | null = null;
-  let fileContent = '';
-  let isPreviewLoading = false;
   let selectedLine: number | null = null;
+  let fileContent: string = '';
+  let lastPreviewedFile: string | null = null;
+  let lastPreviewedLine: number | null = null;
+  let highlightTimeout: number | null = null;
+  let searchStats = {
+    scanned: 0,
+    files: 0,
+    matches: 0,
+    duration: 0
+  };
 
-  // Function to scroll to a specific line in the preview
-  function scrollToLine(lineNum: number) {
-    const lineElement = document.querySelector(`.line-${lineNum}`);
-    if (lineElement) {
-      lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      lineElement.classList.add('highlighted-line');
-      setTimeout(() => {
-        lineElement.classList.remove('highlighted-line');
-      }, 2000);
-    }
-  }
-
-  async function loadFilePreview(filePath: string, lineNum?: number) {
-    selectedFile = filePath;
-    isPreviewLoading = true;
-    selectedLine = lineNum || null;
-    try {
-      fileContent = await readFile(filePath);
-      if (lineNum) {
-        // Wait for the content to be rendered
-        setTimeout(() => scrollToLine(lineNum), 100);
+  $: {
+    console.log('Raw results received:', results);
+    if (results) {
+      try {
+        const parsed = parseResults(results);
+        console.log('Parsed results:', parsed);
+        parsedResults = parsed.results;
+        searchStats = parsed.stats;
+        console.log('Updated searchStats:', searchStats);
+      } catch (error) {
+        console.error('Error parsing results:', error);
       }
-    } catch (e) {
-      error = `Failed to load file preview: ${e}`;
-      fileContent = '';
-    } finally {
-      isPreviewLoading = false;
     }
   }
 
   // Function to split file content into lines with line numbers
-  function getFileLines(content: string): { num: number; content: string }[] {
-    return content.split('\n').map((line, index) => ({
-      num: index + 1,
-      content: line
-    }));
+  function getFileLines(content: string, selectedLine: number | null): { num: number; content: string }[] {
+    console.log('getFileLines called with selectedLine:', selectedLine);
+    const lines = content.split('\n');
+    console.log('Total lines from content:', lines.length);
+    
+    // If no selected line, just return all lines with sequential numbers
+    if (selectedLine === null) {
+        return lines.map((line, i) => ({ num: i + 1, content: line }));
+    }
+    
+    // Calculate the start line number for the preview
+    const startLineNum = Math.max(1, selectedLine - 10);
+    console.log('Start line number:', startLineNum);
+    
+    // Return lines with their actual line numbers
+    return lines.map((line, i) => {
+        const lineNum = startLineNum + i;
+        console.log(`Line ${i + 1}: actual number=${lineNum}, content length=${line.length}`);
+        return { 
+            num: lineNum, 
+            content: line 
+        };
+    });
+  }
+
+  // Function to scroll to a specific line in the preview and highlight it
+  function scrollToLine(lineNum: number) {
+    console.log('scrollToLine called with lineNum:', lineNum);
+    
+    // Wait for DOM to update
+    setTimeout(() => {
+        const lineElement = document.querySelector(`[data-line="${lineNum}"]`);
+        console.log('Found line element:', lineElement);
+        
+        if (lineElement) {
+            // Remove any existing highlight
+            document.querySelectorAll('.jumped-line').forEach(el => {
+                el.classList.remove('jumped-line');
+            });
+            
+            // Add highlight
+            lineElement.classList.add('jumped-line');
+            
+            // Scroll to the line
+            lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            console.log('Scrolled to line:', lineNum);
+            
+            // Remove highlight after 1 second
+            setTimeout(() => {
+                lineElement.classList.remove('jumped-line');
+            }, 1000);
+        } else {
+            console.error('Could not find line element for line:', lineNum);
+            // Debug: List all available line numbers
+            const allLines = document.querySelectorAll('[data-line]');
+            console.log('Available line numbers:', Array.from(allLines).map(el => el.getAttribute('data-line')));
+        }
+    }, 100);
+  }
+
+  async function loadFilePreview(filePath: string, lineNum: number) {
+    console.log('loadFilePreview called with:', { filePath, lineNum });
+    
+    try {
+        // If we're already showing this file, just scroll to the new line
+        if (lastPreviewedFile === filePath) {
+            console.log('Same file, just scrolling to line:', lineNum);
+            selectedLine = lineNum;
+            scrollToLine(lineNum);
+            return;
+        }
+        
+        console.log('Loading new file content');
+        fileContent = await readFile(filePath, lineNum);
+        console.log('File content loaded, length:', fileContent.length);
+        
+        lastPreviewedFile = filePath;
+        selectedLine = lineNum;
+        
+        // Wait for DOM to update with new content
+        setTimeout(() => {
+            scrollToLine(lineNum);
+        }, 100);
+    } catch (error) {
+        console.error('Error loading file preview:', error);
+        fileContent = `Error loading file: ${error}`;
+    }
   }
 </script>
 
-<div class="split-view">
-  <!-- Search results panel -->
-  <div class="search-panel">
-    {#if error}
-      <pre class="error">{error}</pre>
-    {:else if files.length > 0}
-      <!-- Statistics display -->
-      {#if scannedFiles !== undefined}
-        <div class="statistics">
-          Scanned files: {scannedFiles}, Found {filesWithMatches} files with {totalMatches} matches. Done in {durationMs} ms.
-        </div>
-      {/if}
-      
-      <div class="results">
-        {#each files as file}
-          <div class="file-section">
-            <div 
-              class="file-header" 
-              on:click={() => loadFilePreview(file.name)}
-              on:keydown={(e) => e.key === 'Enter' && loadFilePreview(file.name)}
-              role="button"
-              tabindex="0"
-            >
-              <span class="file-icon">📄</span>
-              <span class="file-name" title={file.name}>{getDisplayPath(file.name, basePath)}</span>
-              <span class="match-count">{file.lines.length} matches</span>
-            </div>
-            <div class="file-content">
-              {#each file.lines as line}
-                <div 
-                  class="search-line" 
-                  on:click={() => loadFilePreview(file.name, parseInt(line.num))}
-                  on:keydown={(e) => e.key === 'Enter' && loadFilePreview(file.name, parseInt(line.num))}
-                  role="button"
-                  tabindex="0"
-                  data-query={searchQuery}
-                  data-color={highlightColor}
-                >
-                  <span class="line-num">{line.num}:</span>
-                  <span class="line-content {useHorizontalScroll ? 'scrollable' : 'no-scroll'}" use:highlightTextAction={{ text: line.content, query: searchQuery, color: highlightColor }} />
-                </div>
-              {/each}
-            </div>
+<div class="search-results">
+  {#if parsedResults.length > 0}
+    <div class="stats-bar">
+      <span>Scanned {searchStats.scanned} files</span>
+      <span>Found {searchStats.matches} matches in {searchStats.files} files</span>
+      <span>Search took {searchStats.duration}ms</span>
+    </div>
+    <div class="results-container">
+      <div class="results-list">
+        {#each parsedResults as result}
+          <div 
+            class="result-item" 
+            class:selected={selectedFile === result.file && selectedLine === result.line}
+            on:click={() => loadFilePreview(result.file, result.line)}
+          >
+            <div class="file-path">{result.file}</div>
+            <div class="line-number">Line {result.line}</div>
+            <div class="line-content">{result.content}</div>
           </div>
         {/each}
       </div>
-    {:else}
-      <div class="no-results">No results found</div>
-    {/if}
-  </div>
-
-  <!-- File preview panel -->
-  <div class="preview-panel">
-    {#if selectedFile}
-      <div class="preview-header">
-        <span class="preview-title">{getDisplayPath(selectedFile, basePath)}</span>
-      </div>
-      {#if isPreviewLoading}
-        <div class="loading">Loading file preview...</div>
-      {:else if fileContent}
-        <div class="file-preview">
-          {#each getFileLines(fileContent) as line}
-            <div 
-              class="preview-line line-{line.num}"
-              data-query={searchQuery}
-              data-color={highlightColor}
-            >
-              <span class="line-num">{line.num}:</span>
-              <span class="line-content {useHorizontalScroll ? 'scrollable' : 'no-scroll'}" use:highlightTextAction={{ text: line.content, query: searchQuery, color: highlightColor }} />
-            </div>
-          {/each}
+      {#if selectedFile}
+        <div class="preview-panel">
+          <div class="preview-header">
+            <span class="file-name">{selectedFile}</span>
+            <span class="line-number">Line {selectedLine}</span>
+          </div>
+          <div class="file-preview">
+            {#each getFileLines(fileContent, selectedLine) as line}
+              <div 
+                class="preview-line" 
+                class:jumped-line={line.num === selectedLine}
+                data-line={line.num}
+              >
+                <span class="line-number">{line.num}</span>
+                <span class="line-content">{line.content}</span>
+              </div>
+            {/each}
+          </div>
         </div>
-      {:else}
-        <div class="no-preview">No preview available</div>
       {/if}
-    {:else}
-      <div class="no-file-selected">
-        Select a file from the search results to preview
-      </div>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <div class="no-results">No results found</div>
+  {/if}
 </div>
 
 <style>
-  .split-view {
+  .search-results {
     display: flex;
-    flex: 1;
-    gap: 1rem;
-    min-height: 0; /* Important for nested flexbox scrolling */
-  }
-
-  .search-panel, .preview-panel {
-    flex: 1;
-    overflow: auto;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background: #fff;
-  }
-
-  .file-section {
-    border-bottom: 1px solid #eee;
-  }
-
-  .file-header {
-    padding: 0.5rem;
-    background: #f5f5f5;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .file-header:hover {
-    background: #e9e9e9;
-  }
-
-  .file-icon {
-    font-size: 1.2rem;
-  }
-
-  .file-name {
-    flex: 1;
-    white-space: nowrap;
+    flex-direction: column;
+    height: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .match-count {
-    color: #666;
+  .stats-bar {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem;
+    background-color: var(--background-secondary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
+
+  .results-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .results-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+  }
+
+  .result-item {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+  }
+
+  .result-item:hover {
+    background-color: var(--background-hover);
+  }
+
+  .result-item.selected {
+    background-color: var(--background-selected);
+  }
+
+  .file-path {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+  }
+
+  .line-number {
+    color: var(--text-secondary);
     font-size: 0.9rem;
   }
 
-  .file-content {
-    padding: 0.5rem;
+  .line-content {
+    font-family: monospace;
+    white-space: pre;
+    overflow-x: auto;
   }
 
-  .search-line, .preview-line {
+  .preview-panel {
+    flex: 1;
     display: flex;
-    gap: 0.5rem;
+    flex-direction: column;
+    border-left: 1px solid var(--border-color);
+  }
+
+  .preview-header {
+    padding: 0.5rem;
+    background-color: var(--background-secondary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .file-preview {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+    font-family: monospace;
+  }
+
+  .preview-line {
+    display: flex;
+    gap: 1rem;
     padding: 0.25rem 0;
-    cursor: pointer;
   }
 
-  .search-line:hover, .preview-line:hover {
-    background: #f5f5f5;
-  }
-
-  .line-num {
-    color: #666;
+  .preview-line .line-number {
     min-width: 3rem;
     text-align: right;
     user-select: none;
   }
 
-  .line-content {
+  .preview-line .line-content {
     flex: 1;
     white-space: pre;
   }
 
-  .line-content.scrollable {
-    overflow-x: auto;
-    text-overflow: clip;
+  .jumped-line {
+    background-color: var(--highlight-color);
+    transition: background-color 0.3s ease;
   }
 
-  .line-content.no-scroll {
-    overflow-x: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .preview-header {
-    padding: 0.5rem;
-    background: #f5f5f5;
-    border-bottom: 1px solid #ddd;
-  }
-
-  .preview-title {
-    font-weight: bold;
-  }
-
-  .file-preview {
-    margin: 0;
-    padding: 0.5rem;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
-
-  .highlighted-line {
-    animation: highlight 2s ease-out;
-  }
-
-  @keyframes highlight {
-    0% { background-color: var(--highlight-color, #ffff00); }
-    100% { background-color: transparent; }
-  }
-
-  .loading, .no-preview, .no-file-selected, .no-results {
+  .no-results {
     padding: 1rem;
-    color: #666;
     text-align: center;
-  }
-
-  .error {
-    color: #d32f2f;
-    padding: 1rem;
-    background: #ffebee;
-    border-radius: 4px;
-    margin: 1rem 0;
+    color: var(--text-secondary);
   }
 </style> 

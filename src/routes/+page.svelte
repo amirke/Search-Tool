@@ -1,96 +1,44 @@
 <!--
-  This is the main Svelte frontend component for the Tauri application.
-  It provides a minimal UI for:
-  - Entering a search query
-  - Selecting a folder via a system dialog
-  - Executing the `ripgrep` search via Rust backend (using Tauri `invoke`)
-  - Displaying results or errors
+  File: +page.svelte
+  Purpose: Main Svelte frontend component for the Tauri search tool.
+  - Handles user input for search query and folder selection.
+  - Invokes Rust backend via Tauri to perform ripgrep search.
+  - Displays results and errors.
+  - Uses SearchResults component to render output.
+  Special: Uses Tauri's invoke API to call backend command 'search_text'.
 -->
 
 <script lang="ts">
+  // onMount: When the component mounts, automatically run a search with the default query and path.
+  // Used by: Svelte lifecycle, triggers search on load.
+  // Special: Results are set from backend, errors are caught and displayed.
   import { onMount } from 'svelte';
-  import SearchForm from '../components/SearchForm.svelte';
-  import SearchResults from '../components/SearchResults.svelte';
-  import { search, checkPortStatus } from '../services/searchService';
-  import type { SearchResult } from '../types/search';
+  import SearchResults from '../components/SearchResults.svelte'; // Renders the search results, expects 'results' and 'searchPath' props
+  import { invoke } from '@tauri-apps/api/tauri'; // Used to call Rust backend commands
 
-  let query = '';
-  let path = '.';
-  let highlightColor = '#ffff00';
-  let useHorizontalScroll = false;
-  let fileFilter = '';
-  let isLoading = false;
+  let results: string = '';
+  let searchPath = 'C:/Projects/Vin/TOP/Arinc818_Out/ARINC_818/ARINC818_design/ARINC818/ARINC818_Controller/Receive_A818'; // Default path for demo
+  let query = 'when'; // Default query for demo
   let error = '';
-  let searchResult: SearchResult | null = null; // Store the whole result
 
-  async function handleSearch(event: CustomEvent<{ 
-    query: string; 
-    path: string; 
-    highlightColor: string;
-    useHorizontalScroll: boolean;
-    fileFilter: string;
-  }>) {
-    const { query, path, highlightColor: newColor, useHorizontalScroll: newScroll, fileFilter: newFilter } = event.detail;
-    highlightColor = newColor;
-    useHorizontalScroll = newScroll;
-    fileFilter = newFilter;
-    isLoading = true;
-    error = '';
-    searchResult = null; // Clear previous results
+  // AUTOMATE: Run search on mount
+  // This will call the backend 'search_text' command with the default query and path.
+  // Sets 'results' or 'error' accordingly.
+  onMount(async () => {
     try {
-      const result = await search({ query, path });
-      searchResult = result; // Store the full result
-      if (result.error) {
-        error = result.error;
-      }
+      results = await invoke('search_text', { query, path: searchPath });
     } catch (e) {
-      error = `Search failed: ${e}`;
-    } finally {
-      isLoading = false;
+      error = e + '';
     }
-  }
-
-  onMount(() => {
-    checkPortStatus();
   });
-
-  // Function to handle opening the About window (will implement later)
-  function openAboutWindow() {
-    console.log('Open About window'); // Placeholder
-  }
 </script>
 
 <main>
   <h1>🔍 Fast Text Search (ripgrep)</h1>
-
-  <SearchForm
-    bind:query
-    bind:path
-    bind:highlightColor
-    bind:useHorizontalScroll
-    bind:fileFilter
-    {isLoading}
-    on:search={handleSearch}
-  />
-
-  {#if searchResult}
-    <SearchResults
-      files={searchResult.files}
-      basePath={path}
-      error={searchResult.error || ''}
-      {highlightColor}
-      searchQuery={query}
-      {useHorizontalScroll}
-      scannedFiles={searchResult.scannedFiles}
-      filesWithMatches={searchResult.filesWithMatches}
-      totalMatches={searchResult.totalMatches}
-      durationMs={searchResult.durationMs}
-    />
-  {:else if error}
+  {#if error}
     <div class="error">{error}</div>
   {/if}
-
-  <button class="about-button" on:click={openAboutWindow}>About</button>
+  <SearchResults {results} {searchPath} /> <!-- Passes results and path to SearchResults component -->
 </main>
 
 <style>
@@ -103,32 +51,15 @@
     display: flex;
     flex-direction: column;
   }
-
   h1 {
     margin: 0 0 1rem 0;
     font-size: 1.5rem;
   }
-
   .error {
     color: #d32f2f;
     padding: 1rem;
     background: #ffebee;
     border-radius: 4px;
     margin: 1rem 0;
-  }
-
-  .about-button {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    background: #f0f0f0;
-    color: #333;
-  }
-
-  .about-button:hover {
-    background: #e0e0e0;
   }
 </style>

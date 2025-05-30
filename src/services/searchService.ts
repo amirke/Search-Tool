@@ -42,9 +42,9 @@ export async function search(params: SearchParams): Promise<SearchResult> {
     }
 }
 
-export async function readFile(path: string): Promise<string> {
+export async function readFile(path: string, lineNumber?: number): Promise<string> {
     try {
-        return await invoke('read_file', { path }) as string;
+        return await invoke('read_file', { path, lineNumber }) as string;
     } catch (e) {
         throw new Error(`Failed to load file preview: ${e}`);
     }
