@@ -22,7 +22,8 @@ export async function search(params: SearchParams): Promise<SearchResult> {
     try {
         const rawResults = await invoke('search_text', {
             query: params.query.trim(),
-            path: params.path.trim()
+            path: params.path.trim(),
+            file_filter: params.fileFilter?.trim() || undefined
         }) as string;
         
         if (!rawResults || !rawResults.trim()) {
@@ -49,13 +50,3 @@ export async function readFile(path: string, lineNumber?: number): Promise<strin
         throw new Error(`Failed to load file preview: ${e}`);
     }
 }
-
-export async function checkPortStatus(): Promise<void> {
-    try {
-        const result = await invoke('ensure_port_1420_available') as string;
-        console.log('[Frontend] ' + result);
-    } catch (e) {
-        const msg = 'Failed to check port: ' + (e instanceof Error ? e.message : e);
-        console.log('[Frontend] ' + msg);
-    }
-} 

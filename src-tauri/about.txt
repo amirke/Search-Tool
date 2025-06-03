@@ -1,0 +1,14 @@
+Search Tool - KV Labs
+
+Welcome to the fastest search tool this side of the Milky Way!
+Powered by ripgrep, Svelte, Rust, and a lot of coffee.
+
+Features:
+- Blazing fast text search
+- Modern, clean interface
+- Built with love (and a little bit of frustration)
+
+If you found this tool useful, tell your friends.
+If you found a bug, tell your enemies.
+
+Happy searching! 

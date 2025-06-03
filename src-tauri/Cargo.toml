@@ -40,8 +40,9 @@ tauri-build = { version = "1.5", features = [] }
 #tauri-plugin-dialog = "2.0.0-beta"
 
 [dependencies]
-tauri = { version = "1.5", features = [ "shell-open", "shell-sidecar", "shell-execute", "dialog-all", "fs-all", "path-all"] }
+tauri = { version = "1.5", features = [ "shell-open", "dialog-all", "fs-all", "path-all"] }
 rfd = "0.10"
+winreg = "0.10"
 serde = { version = "1.0", features = ["derive"] }  
 # Serialization/deserialization framework + macros
 
@@ -54,6 +55,9 @@ serde_json = "1.0"
 
 chrono = "0.4"
 dirs = "5.0"
+encoding_rs = "0.8"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+
+

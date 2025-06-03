@@ -7,16 +7,14 @@
                   "distDir":  "../build"
               },
     "package":  {
-                    "productName":  "Search-Tool",
-                    "version":  "0.1.0"
+                    "productName":  "Search Tool",
+                    "version":  "0.21.0"
                 },
     "tauri":  {
                   "allowlist":  {
                                     "all":  false,
                                     "shell":  {
                                                    "all":  false,
-                                                   "execute":  true,
-                                                   "sidecar":  true,
                                                    "open":  true
                                                },
                                     "dialog":  {
@@ -34,16 +32,8 @@
                                 },
                   "bundle":  {
                                  "active":  true,
-                                 "category":  "DeveloperTool",
-                                 "copyright":  "",
-                                 "deb":  {
-                                             "depends":  [
-
-                                                         ]
-                                         },
-                                 "externalBin":  [
-
-                                 ],
+                                 "targets":  "nsis",
+                                 "identifier":  "com.searchtool.dev",
                                  "icon":  [
                                               "icons/32x32.png",
                                               "icons/128x128.png",
@@ -51,46 +41,63 @@
                                               "icons/icon.icns",
                                               "icons/icon.ico"
                                           ],
-                                 "identifier":  "com.search-tool.dev",
-                                 "longDescription":  "",
+                                 "resources":  [
+                                     "../build/**/*"
+                                 ],
+                                 "externalBin":  [
+                                 ],
+                                 "copyright":  "",
+                                 "category":  "DeveloperTool",
+                                 "shortDescription":  "A fast text search tool using ripgrep",
+                                 "longDescription":  "A desktop application for quickly searching text in files using ripgrep",
+                                 "deb":  {
+                                             "depends":  [
+
+                                                         ]
+                                         },
                                  "macOS":  {
-                                               "entitlements":  null,
-                                               "exceptionDomain":  "",
                                                "frameworks":  [
 
                                                               ],
+                                               "minimumSystemVersion":  "",
+                                               "exceptionDomain":  "",
+                                               "signingIdentity":  null,
                                                "providerShortName":  null,
-                                               "signingIdentity":  null
+                                               "entitlements":  null
                                            },
-                                 "resources":  [
-
-                                 ],
-                                 "shortDescription":  "",
-                                 "targets":  ["msi"],
                                  "windows":  {
-                                                 "certificateThumbprint":  "9805DEDA76E7719EBECB0450C6EE5A2394948C91",
+                                                 "certificateThumbprint":  null,
                                                  "digestAlgorithm":  "sha256",
-                                                 "timestampUrl":  "http://timestamp.digicert.com",
-                                                 "wix":  {
-                                                             "language":  "en-US"
-                                                         }
-                                             }
+                                                 "timestampUrl":  ""
+                                              }
                              },
                   "security":  {
                                    "csp":  null
                                },
                   "updater":  {
-                                  "active":  false
+                                  "active":  false,
+                                  "endpoints": [],
+                                  "dialog": false,
+                                  "pubkey": "",
+                                  "windows": {
+                                      "installMode": "passive"
+                                  }
                               },
                   "windows":  [
                                   {
                                       "fullscreen":  false,
-                                      "height":  600,
                                       "resizable":  true,
-                                      "title":  "Search Tool",
-                                      "width":  800,
-                                      "minWidth":  400,
-                                      "minHeight":  300
+                                      "title":  "Search tool 0.21 - KV Labs",
+                                      "width":  1200,
+                                      "height":  800,
+                                      "minWidth":  800,
+                                      "minHeight":  600,
+                                      "decorations": true,
+                                      "transparent": false,
+                                      "center": true,
+                                      "skipTaskbar": false,
+                                      "alwaysOnTop": false,
+                                      "contentProtected": false
                                   }
                               ]
               }
