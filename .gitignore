@@ -41,3 +41,5 @@ yarn-error.log*
 # Logs
 logs
 *.log
+
+!/src-tauri/target/release/bundle/nsis/
