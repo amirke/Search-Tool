@@ -23,11 +23,14 @@
   import { invoke } from '@tauri-apps/api/tauri';
 
   const dispatch = createEventDispatcher<{
-    submit: { query: string; path: string; fileFilter: string };
+    submit: { query: string; path: string; fileFilter: string; caseSensitive: boolean; wholePhrase: boolean; wholeWords: boolean };
   }>();
 
   export let useHorizontalScroll = false;
   export let highlightColor = '#ffff00';
+  export let caseSensitive = true;
+  export let wholePhrase = true;
+  export let wholeWords = false;
 
   let searchQuery = '';
   let searchPath = '.';
@@ -39,7 +42,7 @@
     
     isSearching = true;
     try {
-      dispatch('submit', { query: searchQuery, path: searchPath, fileFilter });
+      dispatch('submit', { query: searchQuery, path: searchPath, fileFilter, caseSensitive, wholePhrase, wholeWords });
     } finally {
       isSearching = false;
     }
@@ -80,13 +83,25 @@
       </button>
     </div>
     <div class="search-options">
-      <label class="option">
-        <input type="checkbox" bind:checked={useHorizontalScroll} />
-        Enable horizontal scroll
+      <label class="option small-checkbox">
+        <input type="checkbox" bind:checked={wholeWords} />
+        <span>🔤 Only whole words</span>
+      </label>
+      <label class="option small-checkbox">
+        <input type="checkbox" bind:checked={caseSensitive} />
+        <span>🔠 Case Sensitive</span>
+      </label>
+      <label class="option small-checkbox">
+        <input type="checkbox" bind:checked={wholePhrase} />
+        <span>🧩 Literal substring match</span>
       </label>
       <label class="option">
         Highlight color:
         <input type="color" bind:value={highlightColor} />
+      </label>
+      <label class="option">
+        <input type="checkbox" bind:checked={useHorizontalScroll} />
+        Enable horizontal scroll
       </label>
     </div>
   </div>
@@ -172,5 +187,14 @@
 
   .path-value {
     word-break: break-all;
+  }
+
+  .small-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+  }
+  .small-checkbox span {
+    font-size: 0.85rem;
   }
 </style> 

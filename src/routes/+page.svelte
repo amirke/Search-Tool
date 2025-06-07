@@ -33,13 +33,19 @@
   let showAbout = false;
   let aboutText = '';
   let version = '';
+  let fileFilter = '';
+  let caseSensitive = true;
+  let wholePhrase = true;
+  let wholeWords = false;
+
+  
 
   /**
    * Handle the custom `search` event emitted from <SearchForm />
    * Extract all parameters and perform async call to Rust backend
    */
 
-  async function handleSearch(query: string, path: string) {
+  async function handleSearch(query: string, path: string, fileFilter: string, caseSensitive: boolean, wholePhrase: boolean, wholeWords: boolean) {
     try {
       console.log('=== STARTING SEARCH ===');
       console.log('Query:', query);
@@ -48,7 +54,7 @@
       searchQuery = query; // Update the search query for highlighting
       basePath = path; // Update the base path for file display
       
-      const result = await invoke('search_text', { query, path });
+      const result = await invoke('search_text', { query, path, fileFilter, caseSensitive, wholePhrase, wholeWords });
       
       if (typeof result === 'string') {
         try {
@@ -65,20 +71,25 @@
               if (line.startsWith('<line')) {
                 const fileMatch = line.match(/file="([^"]+)"/);
                 const numMatch = line.match(/num="([^"]+)"/);
+
                 const contentMatch = line.match(/>([^<]+)<\/line>/);
                 
+                 
                 if (fileMatch && numMatch && contentMatch) {
                   const fileName = fileMatch[1];
                   const lineNum = numMatch[1];
                   const content = contentMatch[1];
-                  
+                
+                 
                   let file = files.find(f => f.name === fileName);
                   if (!file) {
                     file = { name: fileName, lines: [] };
                     files.push(file);
+
                   }
-                  
+
                   file.lines.push({ num: lineNum, content });
+
                 }
               }
             }
@@ -98,7 +109,9 @@
           console.log('number of files:', searchResult.files.length);
         } catch (e) {
           console.error('Failed to parse result:', e);
-          error = e as string;
+            //  error = e as string;
+          error = String(e);
+
         }
       } else {
         console.log('=== UNEXPECTED RESULT TYPE ===');
@@ -116,7 +129,9 @@
         });
       }
       console.error('=== END SEARCH ERROR ===');
-      error = e as string;
+      //  error = e as string;
+      error = String(e);
+
     }
   }
 
@@ -132,17 +147,22 @@
   }
 </script>
 
+
+
 <main>
   <div style="display: flex; justify-content: space-between; align-items: center;">
-    <h1>🔍 חיפוש טקסט מהיר (ripgrep)</h1>
+    <h1>🔍 KV Fast search (ripgrep)</h1>
     <button class="about-button" on:click={openAboutWindow}>About</button>
   </div>
 
   <!-- Search Form input fields -->
   <SearchForm 
-    on:submit={({ detail }) => handleSearch(detail.query, detail.path)}
+    on:submit={({ detail }) => handleSearch(detail.query, detail.path, detail.fileFilter, detail.caseSensitive, detail.wholePhrase, detail.wholeWords)}
     bind:useHorizontalScroll
     bind:highlightColor
+    bind:caseSensitive
+    bind:wholePhrase
+    bind:wholeWords
   />
 
   <!-- If result received, show it -->
