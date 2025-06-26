@@ -32,32 +32,9 @@
   let selectedFile: string | null = null;
   let isPreviewLoading = false;
   let selectedLine: number | null = null;
-  let lastScrolledLine: number | null = null;
-  let lastScrolledFile: string | null = null;
-  let previousLineNumber = 0;
-
-  // let visibleOffset = 0;
-  // let visibleCount = 0;
-  let visibleRange = { offset: 0, count: 0 };
-  let scrollTimeout: ReturnType<typeof setTimeout>;
-  let lineHeight = 20;
-
-  let ignoreScroll = false;
-  let lineNumberBase = 0;  // Updated when you slice/remove lines
-
+  let lineNumberBase = 1;  // Start from line 1
   let fileLines: string[] = [];
-  let chunkSize = 100;
-  let isLoading = false;
-
-  let previewContainer: HTMLDivElement | null = null;
-
-  let StartFlag = false;
-
   let previousExpand = false;
-
-
-  let loadedLinesCount: Record<string, number> = {};
-  const CHUNK_SIZE = 100;
 
 
   // React to global expand/collapse changes
@@ -100,138 +77,68 @@ $: displayLines = fileLines.map((line, i) => ({ //
 
 
 //================   Load File Preview   =================
-  // loadFilePreview is the main function that loads the file preview.
-  // It is called when the user clicks on a file in the search results.
-  // It is also called when the user scrolls to the top or bottom of the preview.
-  // It is also called when the user clicks on a line in the preview.
-  // It is also called when the user hovers over a line in the preview.
-  // It is also called when the user focuses on a line in the preview.
-  // It is also called when the user scrolls to the top or bottom of the preview.
+  // loadFilePreview - simplified to load entire file at once for immediate display
   async function loadFilePreview(filePath: string, lineNumber?: number) {
-  try {
-  //  ignoreScroll = true;
-    StartFlag = true;
-    console.log('========loadFilePreview=========='); 
-    const linesPerScreen = 2000; // Amir: this parametr can be changed
-    const buffer = 20; // lines before and after
-    const totalLinesToLoad = linesPerScreen+ (buffer * 2);              
-    const halfChunk = Math.floor(totalLinesToLoad / 2);  // Half before and after
-    const centerLine = lineNumber ?? 0;
-    const safeOffset = Math.max(1, centerLine - halfChunk);  // Make sure we don't go below 0
-    const countToLoad = linesPerScreen + buffer * 2;
-
-    // Determine if we should skip reloading
-    const isSameFile = selectedFile === filePath;
-    const isLineVisible = (
-      lineNumber === undefined ||
-      (lineNumber >= visibleRange.offset &&
-       lineNumber < visibleRange.offset + visibleRange.count)
-    );
-
-    console.log('isSameFile', isSameFile);
-    console.log('isLineVisible', isLineVisible);
-    console.log('lineNumber', lineNumber);  
-    console.log('filePath', filePath); 
-    console.log('safeOffset', safeOffset);
-    console.log('visibleRange.offset', visibleRange.offset);
-    console.log('visibleRange.count', visibleRange.count);
-
-
-    const direction: 'up' | 'down' =
-      previousLineNumber !== null && lineNumber !== undefined && lineNumber < previousLineNumber ? 'up' : 'down';
-    console.log('direction', direction);
-
-    if (isSameFile && isLineVisible) {
-      if (lineNumber !== undefined) {
-        scrollToLine(lineNumber, 'same');
-        previousLineNumber = lineNumber;
-        StartFlag = false;
-        console.log('scrollToLine 1 ended, StartFlag = ', StartFlag);
+    try {
+      console.log('========loadFilePreview=========='); 
+      
+      // If same file and we just want to scroll to a line, do that directly
+      if (selectedFile === filePath && fileLines.length > 0) {
+        if (lineNumber !== undefined) {
+          scrollToLine(lineNumber, 'same');
+        }
+        return;
       }
-      return;
-    }
 
-    //  if the file is changed, clear the preview state (clean memory + UI state)
-    if (!isSameFile) {
+      // Clear previous state for new file
       fileLines = [];
-      lineNumberBase = 0;
-      visibleRange = { offset: 0, count: 0 };
-      previousLineNumber = 0;
-      selectedLine = null;
-      ignoreScroll = false;
-    }
+      lineNumberBase = 1;
+      selectedLine = lineNumber || null;
+      isPreviewLoading = true;
+      selectedFile = filePath;
 
-    isPreviewLoading = true;
-    selectedFile = filePath;
-    selectedLine = lineNumber || null;
+      // Load entire file at once for immediate display
+      const result = await invoke<{ lines: string[] }>('read_file_mmap_chunk', {
+        path: filePath,
+        offset: 1,
+        count: 50000 // Load up to 50k lines at once for complete display
+      });
 
-
-
-  ignoreScroll = true;
-
-  const resultLines = await fetchChunk(safeOffset, countToLoad, filePath);
- 
-
-  console.log('opened from line', safeOffset, 'to line', safeOffset + countToLoad);
-
-
-  if (resultLines.length) {
-    fileLines = resultLines;
-    lineNumberBase = safeOffset;
-    visibleRange = { offset: safeOffset, count: countToLoad };
-
-    setTimeout(() => {
-      if (lineNumber) {
-        scrollToLine(lineNumber, direction);
-        previousLineNumber = lineNumber;
+      if (result.lines.length) {
+        fileLines = result.lines;
+        lineNumberBase = 1;
+        
+        // Scroll to specific line if requested
+        setTimeout(() => {
+          if (lineNumber) {
+            scrollToLine(lineNumber, 'down');
+          }
+        }, 100);
       }
-    StartFlag = false;
-    console.log('scrollToLine 2 ended, StartFlag = ', StartFlag);
 
-    }, 100);
+    } catch (e) {
+      console.error('Failed to load file preview:', e);
+      error = String(e);
+    } finally {
+      isPreviewLoading = false;
+    }
   }
-
-
-  } catch (e) {
-    console.error('Failed to load file preview:', e);
-  //  error = e as string;
-    error = String(e);
-  } finally {
-    isPreviewLoading = false;
-  }
-}
 
 //================   Scroll To Line   =================
-//  This function is used to scroll to a specific line in the preview.
-//  It is also used to scroll to the top or bottom of the preview.
-//  It is also used to scroll to a specific line.
-//  It is also used to scroll to the top or bottom of the preview.
+// Simplified scroll to line function for immediate display
 function scrollToLine(lineNum: number, direction: 'up' | 'down' | 'same' = 'down') {
-    const previewContainer = document.querySelector('.file-preview');  // 
+    const previewContainer = document.querySelector('.file-preview');
     console.log('Starting scrollToLine', lineNum);
     if (!previewContainer) {
       console.log('Preview container not found in scrollToLine');
-    return;
-      }
+      return;
+    }
 
     // Find the line element with the matching data-line attribute
     const lineElement = previewContainer.querySelector(`[data-line="${lineNum}"]`);
-    const lastlineElement = previewContainer.querySelector(`[data-line="${lineNum+68}"]`);
-
-
-
-    if (direction === 'up') {
-      if (lastlineElement) {
-       lastlineElement.scrollIntoView({ behavior: 'instant', block: 'end' });
-
-      } 
-    }
-
-
-
     
     if (lineElement) {
-      // Use instant scroll for initial load, smooth for subsequent
+      // Scroll to the line with smooth animation
       lineElement.scrollIntoView({ 
         behavior: 'smooth', 
         block: 'center',
@@ -254,145 +161,12 @@ function scrollToLine(lineNum: number, direction: 'up' | 'down' | 'same' = 'down
 
 
 //================   Scroll Trigger   =================
-//  This function is called when the user scrolls in the preview container.
-//  It is used to load the previous or next chunk of lines.
-//  It is also used to scroll to the top or bottom of the preview.
-//  It is also used to scroll to a specific line.
-//  It is also used to scroll to the top or bottom of the preview.
+// Simplified scroll handler - no more chunk loading needed
 function onScroll(event: Event) {
-  //if (1==1 ) return;
-  const el = event.target as HTMLElement;
-
-  const nearTop = el.scrollTop < 100;
-  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-  const N_loadedFiles = fileLines.length < chunkSize;
-
-  if (ignoreScroll) {
-    if (nearTop || nearBottom || N_loadedFiles)  { 
-      console.log('ignoreScroll: nearTop or nearBottom or N_loadedFiles', nearTop, nearBottom, N_loadedFiles);
-      return;
-    } else {
-      ignoreScroll = false;
-    }
-  }
-
-  // console.log('////////// on Scroll \\\\\\\\\\\\\\\\\\\\\\\\\\');
-
-
-  if (nearTop) {  // 100 is the threshold for loading the previous chunk
-    loadPreviousChunk();
-  } else if (nearBottom) { // 100 is the threshold for loading the next chunk
-    loadNextChunk();
-  }
+  // Just handle normal scrolling, no chunk loading
 }
 
-//================   Fetch Chunk   =================
-//  This function is used to fetch a chunk of lines from the file.
-//  It is also used to scroll to a specific line.
-//  It is also used to scroll to the top or bottom of the preview.
-//  It is also used to scroll to the top or bottom of the preview.
-async function fetchChunk(offset: number, count: number, path?: string): Promise<string[]> {
-  const filePath = path ?? selectedFile;
-  if (!filePath) {
-    console.error('No file path specified for fetchChunk');
-    return [];
-  }
-
-  const result = await invoke<{ lines: string[] }>('read_file_mmap_chunk', {
-    path: filePath,
-    offset,
-    count
-  });
-
-  console.log('opened chunk from line', offset, 'to line', offset + count);
-
-  return result.lines;
-}
-
-
-//================   Load Next/Previous Chunk   =================
-//  This function is used to load the next or previous chunk of lines from the file.
-//  It is also used to scroll to a specific line.
-//  It is also used to scroll to the top or bottom of the preview.
-//  It is also used to scroll to the top or bottom of the preview.
-async function loadNextChunk() {
-  console.log('loadNextChunk');
-  if (isLoading || !selectedFile) return; //this is the trigger for the scroll-load more
-  isLoading = true;
-
-  const start = lineNumberBase + fileLines.length;
-  const result = await fetchChunk(start, chunkSize);
-
-  fileLines = fileLines.concat(result); // result is string[]
-  // Do not update lineNumberBase (we're appending to bottom)
-
-
-  const maxLines = 300;
-  
-  if (fileLines.length > maxLines) {
-    const over = fileLines.length - maxLines;
-    console.log('over', over);
-    console.log('lineNumberBase Before', lineNumberBase);
-    console.log('fileLines.length Before', fileLines.length);  
-
-    fileLines = fileLines.slice(over); // Remove from bottom
-    lineNumberBase += over; 
-
-    console.log('lineNumberBase After', lineNumberBase);
-    console.log('fileLines.length After', fileLines.length);  
- 
-    // No need to change lineNumberBase
-  }
-
-
-  visibleRange = {
-    offset: lineNumberBase,
-    count: fileLines.length
-  };
-
-  isLoading = false;
-  await tick();
-}
-
-async function loadPreviousChunk() {
-  console.log('loadPreviousChunk');
-  if (isLoading || !selectedFile || lineNumberBase === 0) return;
-  isLoading = true;
-
-  const newBase = Math.max(0, lineNumberBase - chunkSize);
-  const result = await fetchChunk(newBase, chunkSize);
-
-  const oldTopLineNum = lineNumberBase + 1;  // line currently at top before prepend
-
-  fileLines = result.concat(fileLines); // prepend
-  lineNumberBase = newBase;
- 
-  
-  const maxLines = 300;
- 
-  if (fileLines.length > maxLines) {
-    console.log('lineNumberBase Before', lineNumberBase);
-    console.log('fileLines.length Before', fileLines.length);  
-  
-    fileLines = fileLines.slice(0, maxLines); // cut off from the end
-    // ❗ lineNumberBase stays the same (you didn't remove from top)
-
-    console.log('lineNumberBase After', lineNumberBase);
-    console.log('fileLines.length After', fileLines.length);  
-  }
-
- visibleRange = {
-    offset: lineNumberBase,
-    count: fileLines.length
-  };
-
-  isLoading = false;
-  await tick();
-
-  // scroll back to where user was
-//  scrollToLine(lineNumberBase + chunkSize, 'same');
- // scrollToLine(oldTopLineNum, 'same');
-}
+// Chunk loading functions removed - we now load entire files at once for immediate display
 
 
 
@@ -582,13 +356,9 @@ async function loadMoreLines(filePath: string, startOffset: number, count: numbe
                 <span class="file-name" title={file.name}>{getDisplayPath(file.name, basePath)}</span>
                 <span class="match-count">{file.lines.length} matches</span>
               </div>
-       <!--      {#if file.open} -->
-
-       
-                <div class="file-content" hidden={!file.open}>
-                    
+              {#if file.open}
+                <div class="file-content">
                   {#each file.lines as line}
-
                     <div 
                       class="search-line line-{line.num}"
                       on:click={() => loadFilePreview(file.name, parseInt(line.num))}
@@ -604,7 +374,7 @@ async function loadMoreLines(filePath: string, startOffset: number, count: numbe
                     </div>
                   {/each}
                 </div>
-       <!--      {/if} -->
+              {/if}
             </div>
           {/each}
         </div>
