@@ -1,0 +1,79 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Frontend Build Artifacts
+Frontend/build/
+Frontend/dist/
+Frontend/.svelte-kit/
+
+# Backend Build Artifacts
+Backend/target/
+Backend/Cargo.lock
+
+# Environment Files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor Directories and Files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+
+# Temporary Files
+*.tmp
+*.temp
+.cache/
+
+# OS Generated Files
+Thumbs.db
+Desktop.ini
+.DS_Store?
+._*
+
+# Build Output (keep some for distribution)
+!/Backend/target/release/bundle/nsis/
+!/Backend/target/release/bundle/msi/
+
+# Signing Certificates (for security)
+*.p12
+*.pfx
+*.cer
+*.crt
+*.key
+
+# Package Manager Lock Files (keep npm, ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# IDE and Editor Files
+*.swp
+*.swo
+*~
+.project
+.settings/
+nbproject/
+
+# Custom Application Data
+app-data/
+user-settings/ 
